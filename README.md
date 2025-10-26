@@ -1,1 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini SPA — Task Manager</title>
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#60a5fa;
+      --muted:#9aa5b1;
+      --glass: rgba(255,255,255,0.03);
+      --success:#34d399;
+      --danger:#fb7185;
+      --radius:12px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071028 0%, #071a2a 100%);color:#e6eef6;}
+    .app {
+      max-width:1100px;
+      margin:28px auto;
+      padding:18px;
+      display:grid;
+      grid-template-columns:260px 1fr;
+      gap:20px;
+    }
+
+    /* mobile */
+    @media (max-width:880px){
+      .app{grid-template-columns:1fr;padding:12px;}
+      .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-120%);transition:transform .28s ease;z-index:60;width:260px;}
+      .sidebar.open{transform:translateX(0);}
+      .content-header .menu-btn{display:inline-flex;}
+    }
+
+    header.topbar{
+      grid-column:1/-1;
+      background:transparent;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+
+    .brand{
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+
+    .logo {
+      width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#7dd3fc);
+      display:inline-grid;place-items:center;color:#021021;font-weight:700;font-size:18px;
+      box-shadow:0 6px 22px rgba(12,36,60,0.4);
+    }
+
+    .top-actions{display:flex;gap:10px;align-items:center;}
+    .search{
+      background:var(--glass);border:1px solid rgba(255,255,255,0.03);padding:8px 12px;border-radius:999px;display:flex;gap:8px;align-items:center;
+    }
+    .search input{background:transparent;border:0;outline:none;color:var(--muted);min-width:140px;}
+
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:var(--radius);
+      padding:16px;
+      box-shadow: 0 6px 20px rgba(2,6,23,0.6);
+      border: 1px solid rgba(255,255,255,0.02);
+    }
+
+    .sidebar{
+      height:calc(100vh - 56px);
+      overflow:auto;
+      padding:14px;
+      position:relative;
+      border-radius:var(--radius);
+    }
+
+    .nav{
+      display:flex;flex-direction:column;gap:6px;
+    }
+    .nav a{
+      text-decoration:none;color:var(--muted);padding:10px;border-radius:10px;display:flex;gap:10px;align-items:center;
+    }
+    .nav a.active{background:rgba(255,255,255,0.02);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(96,165,250,0.06);}
+    .nav a svg{opacity:0.9}
+
+    .content{
+      min-height:60vh;
+    }
+
+    .content-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+    .content-header h1{margin:0;font-size:20px;letter-spacing:0.2px;}
+    .menu-btn{display:none;align-items:center;gap:8px;background:transparent;border:0;color:var(--muted);font-weight:600;padding:8px;border-radius:10px;}
+    .btn{
+      background:linear-gradient(90deg,var(--accent),#7dd3fc);
+      border:0;color:#021021;padding:8px 12px;border-radius:10px;font-weight:700;cursor:pointer;
+      box-shadow:0 8px 24px rgba(96,165,250,0.12);
+    }
+    .btn.ghost{background:transparent;color:var(--muted);box-shadow:none;border:1px solid rgba(255,255,255,0.03);}
+
+    /* task list */
+    .filters{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+    .chip{padding:6px 10px;border-radius:999px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:var(--muted);cursor:pointer}
+    .chip.active{background:rgba(255,255,255,0.02);color:var(--accent);border-color:rgba(96,165,250,0.14)}
+
+    .tasks{display:grid;gap:8px}
+    .task{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+      border:1px solid rgba(255,255,255,0.02);
+    }
+    .task-left{display:flex;gap:12px;align-items:center;min-width:0}
+    .task-title{font-weight:700}
+    .task-desc{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:460px}
+    .task-actions{display:flex;gap:8px;align-items:center}
+
+    .tiny{font-size:12px;padding:6px 8px;border-radius:8px;}
+    .danger{background:rgba(251,113,133,0.08);color:var(--danger);border:1px solid rgba(251,113,133,0.06)}
+    .success{background:rgba(52,211,153,0.06);color:var(--success);border:1px solid rgba(52,211,153,0.05)}
+
+    /* modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.6);display:none;align-items:center;justify-content:center;z-index:90;}
+    .modal{width:100%;max-width:680px;background:linear-gradient(180deg,#071226, #061423);padding:18px;border-radius:14px;}
+    .modal.open{display:flex}
+    .form-row{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+    label{font-size:13px;color:var(--muted)}
+    input[type="text"],textarea, input[type="email"], input[type="password"]{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:10px;border-radius:8px;outline:none}
+    textarea{min-height:100px;resize:vertical}
+
+    footer.app-footer{grid-column:1/-1;margin-top:12px;text-align:center;color:var(--muted);font-size:13px;padding:6px}
+
+    .stats{display:flex;gap:10px;flex-wrap:wrap}
+    .stat{padding:12px;border-radius:10px;background:rgba(255,255,255,0.01);min-width:160px}
+    .muted{color:var(--muted)}
+
+    /* tiny helpers */
+    .hidden{display:none}
+    .loading{opacity:0.75;filter:blur(.2px)}
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">TSK</div>
+        <div>
+          <div style="font-weight:800">TaskFlow</div>
+          <div style="font-size:12px;color:var(--muted)">Single Page Application • Demo</div>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <div class="search card" style="display:flex;align-items:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" style="opacity:.6" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></circle></svg>
+          <input id="globalSearch" placeholder="Search tasks..." />
+        </div>
+
+        <div id="authRegion"></div>
+      </div>
+    </header>
+
+    <aside class="sidebar card" id="sidebar">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-weight:800">Navigation</div>
+        <button class="menu-btn" onclick="toggleSidebar()" aria-label="toggle menu" style="display:none">☰</button>
+      </div>
+
+      <nav class="nav" id="nav">
+        <a href="#/dashboard" data-route="dashboard" class="nav-link active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" d="M3 13h8V3H3v10zM13 21h8v-8h-8v8zM13 3v8h8V3h-8zM3 21h8v-6H3v6z"/></svg>
+          Dashboard
+        </a>
+        <a href="#/tasks" data-route="tasks" class="nav-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" d="M9 11l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Tasks
+        </a>
+        <a href="#/profile" data-route="profile" class="nav-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path stroke="currentColor" stroke-width="1.6" d="M12 12a5 5 0 100-10 5 5 0 000 10zM3 21a9 9 0 0118 0"/></svg>
+          Profile
+        </a>
+        <a href="#/about" data-route="about" class="nav-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path stroke="currentColor" stroke-width="1.6" d="M12 20h.01M12 7a1 1 0 110-2 1 1 0 010 2zM12 11v6"/></svg>
+          About
+        </a>
+      </nav>
+
+      <div style="margin-top:16px">
+        <div style="font-weight:700;margin-bottom:8px">Quick Stats</div>
+        <div class="stats">
+          <div class="stat card" id="statTotal"><div class="muted">Total</div><div style="font-weight:800;font-size:18px">0</div></div>
+          <div class="stat card"><div class="muted">Completed</div><div id="statCompleted" style="font-weight:800;font-size:18px">0</div></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-header">
+        <div style="display:flex;gap:12px;align-items:center">
+          <button class="menu-btn" onclick="toggleSidebar()" style="display:none">☰</button>
+          <h1 id="viewTitle">Dashboard</h1>
+          <div class="muted" id="viewSub">Overview & recent activity</div>
+        </div>
+
+        <div>
+          <button class="btn" id="addTaskBtn">+ Add Task</button>
+        </div>
+      </div>
+
+      <section id="viewRoot">
+        <!-- Views are injected here -->
+      </section>
+
+    </main>
+
+    <footer class="app-footer muted">
+      © <span id="year"></span> TaskFlow — Demo SPA · Local-only data (no server)
+    </footer>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+    <div class="modal card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div id="modalTitle" style="font-weight:800">Add Task</div>
+          <div class="muted" id="modalSub">Create a new task</div>
+        </div>
+        <div><button class="btn ghost" id="modalClose">Close</button></div>
+      </div>
+
+      <form id="taskForm">
+        <div class="form-row">
+          <label for="taskTitle">Title *</label>
+          <input id="taskTitle" name="title" required type="text" placeholder="e.g., Prepare project report" />
+        </div>
+
+        <div class="form-row">
+          <label for="taskDesc">Description</label>
+          <textarea id="taskDesc" name="description" placeholder="Optional details..."></textarea>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button type="button" class="btn ghost" id="taskCancel">Cancel</button>
+          <button type="submit" class="btn" id="taskSave">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    /*************************************************************************
+     * Simple SPA (Hash-based routing) + state (localStorage) + CRUD
+     *************************************************************************/
+    (function(){
+      // --- Utilities ---
+      const qs = (s, el=document) => el.querySelector(s);
+      const qsa = (s, el=document) => Array.from(el.querySelectorAll(s));
+      const el = id => document.getElementById(id);
+      const now = () => new Date().toISOString();
+
+      // --- App State + Persistence ---
+      const STORAGE_KEY = 'taskflow.v1';
+      const defaultState = {
+        user: { name: null, email: null, loggedIn: false },
+        tasks: [
+          // sample
+          // { id: 't-1', title:'Welcome!', description:'This is sample task', completed:false, createdAt: '...' }
+        ]
+      };
+
+      function loadState(){
+        try{
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if(!raw) return structuredClone(defaultState);
+          return Object.assign(structuredClone(defaultState), JSON.parse(raw));
+        }catch(e){ console.warn('loadState failed', e); return structuredClone(defaultState); }
+      }
+
+      function saveState(){
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        updateUI();
+      }
+
+      function uid(prefix='id'){
+        return prefix + '-' + Math.random().toString(36).slice(2,9);
+      }
+
+      let state = loadState();
+
+      // --- Basic Router ---
+      const routes = {
+        'dashboard': renderDashboard,
+        'tasks': renderTasks,
+        'profile': renderProfile,
+        'about': renderAbout,
+      };
+
+      function getRoute(){
+        const hash = location.hash.replace(/^#\//,'') || 'dashboard';
+        const [route, ...rest] = hash.split('/');
+        return route || 'dashboard';
+      }
+
+      function navigate(route){
+        location.hash = '#/' + route;
+      }
+
+      window.addEventListener('hashchange', router);
+      document.addEventListener('click', (e)=>{
+        if(e.target.matches('.nav-link') || e.target.closest('.nav-link')) {
+          qsa('.nav-link').forEach(n=>n.classList.remove('active'));
+          const a = e.target.closest('.nav-link');
+          a.classList.add('active');
+        }
+      });
+
+      // --- DOM references ---
+      const viewRoot = el('viewRoot');
+      const viewTitle = el('viewTitle');
+      const viewSub = el('viewSub');
+      const modalBackdrop = el('modalBackdrop');
+      const taskForm = el('taskForm');
+      const taskTitle = el('taskTitle');
+      const taskDesc = el('taskDesc');
+      const addTaskBtn = el('addTaskBtn');
+      const modalClose = el('modalClose');
+      const taskCancel = el('taskCancel');
+      const globalSearch = el('globalSearch');
+      const statTotal = el('statTotal'); // container
+      const statCompleted = el('statCompleted');
+
+      // --- Event listeners ---
+      addTaskBtn.addEventListener('click', ()=>openModal());
+      modalClose.addEventListener('click', closeModal);
+      taskCancel.addEventListener('click', closeModal);
+      modalBackdrop.addEventListener('click', (e)=>{ if(e.target===modalBackdrop) closeModal(); });
+      taskForm.addEventListener('submit', onSaveTask);
+      globalSearch.addEventListener('input', onSearch);
+
+      el('year').textContent = new Date().getFullYear();
+
+      // Initial render
+      updateAuthUI();
+      router();
+      updateUI();
+
+      // --- Router function ---
+      function router(){
+        const route = getRoute();
+        // update nav active
+        qsa('.nav-link').forEach(n=>n.classList.toggle('active', n.dataset.route === route));
+        // call associated render
+        const fn = routes[route] || renderNotFound;
+        fn();
+      }
+
+      // --- Views ---
+      function setViewHeader(title, sub){
+        viewTitle.textContent = title;
+        viewSub.textContent = sub || '';
+      }
+
+      function renderDashboard(){
+        setViewHeader('Dashboard', 'Overview & recent activity');
+        viewRoot.innerHTML = '';
+        const container = document.createElement('div');
+
+        // stats & quick actions
+        const statsWrap = document.createElement('div');
+        statsWrap.className = 'card';
+        statsWrap.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:800;font-size:18px">Welcome${state.user.name ? ', ' + state.user.name : ''} 👋</div>
+              <div class="muted" style="margin-top:6px">Quick glance at your tasks</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn" id="dashAdd">+ New Task</button>
+              <button class="btn ghost" id="dashRefresh">Refresh</button>
+            </div>
+          </div>
+          <div style="margin-top:12px" id="recentWrap"></div>
+        `;
+        container.appendChild(statsWrap);
+
+        viewRoot.appendChild(container);
+
+        // attach listeners
+        qs('#dashAdd', statsWrap).addEventListener('click', ()=>openModal());
+        qs('#dashRefresh', statsWrap).addEventListener('click', ()=>{ updateUI(true) });
+
+        // recent tasks
+        const recentWrap = qs('#recentWrap', statsWrap);
+        const recent = state.tasks.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,6);
+
+        if(recent.length === 0) {
+          recentWrap.innerHTML = '<div class="muted" style="padding:12px">No recent tasks — add your first task.</div>';
+        } else {
+          const list = document.createElement('div');
+          list.className = 'tasks';
+          for(const t of recent){
+            const item = document.createElement('div');
+            item.className = 'task';
+            item.innerHTML = `
+              <div class="task-left">
+                <input type="checkbox" data-id="${t.id}" ${t.completed ? 'checked' : ''} />
+                <div style="min-width:0">
+                  <div class="task-title">${escapeHtml(t.title)}</div>
+                  <div class="task-desc">${escapeHtml(t.description || '')}</div>
+                </div>
+              </div>
+              <div class="task-actions">
+                <div class="muted tiny">${new Date(t.createdAt).toLocaleString()}</div>
+                <button class="tiny ghost" data-edit="${t.id}">Edit</button>
+                <button class="tiny danger" data-delete="${t.id}">Delete</button>
+              </div>
+            `;
+            list.appendChild(item);
+          }
+          recentWrap.appendChild(list);
+
+          // delegation
+          list.addEventListener('click', (e)=>{
+            const id = e.target.dataset.delete || e.target.dataset.edit;
+            if(e.target.matches('[data-delete]')){
+              if(confirm('Delete this task?')) {
+                removeTask(id);
+              }
+            } else if(e.target.matches('[data-edit]')){
+              openModal(id);
+            }
+          });
+          list.querySelectorAll('input[type="checkbox"]').forEach( cb => {
+            cb.addEventListener('change', (ev)=>{
+              toggleComplete(ev.target.dataset.id, ev.target.checked);
+            });
+          });
+        }
+      }
+
+      function renderTasks(){
+        setViewHeader('Tasks', 'Manage your tasks — add, edit, delete, filter.');
+        viewRoot.innerHTML = '';
+        const container = document.createElement('div');
+        container.className = 'card';
+
+        container.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+            <div style="display:flex;gap:12px;align-items:center">
+              <div style="font-weight:800">Tasks</div>
+              <div class="muted">(${state.tasks.length})</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn ghost" id="filterAll">All</button>
+              <button class="btn ghost" id="filterActive">Pending</button>
+              <button class="btn ghost" id="filterDone">Completed</button>
+            </div>
+          </div>
+          <div id="tasksWrap"></div>
+        `;
+        viewRoot.appendChild(container);
+
+        const tasksWrap = qs('#tasksWrap', container);
+
+        function draw(filter='all', search=''){
+          tasksWrap.innerHTML = '';
+          let list = state.tasks.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+
+          if(filter === 'active') list = list.filter(t=>!t.completed);
+          if(filter === 'done') list = list.filter(t=>t.completed);
+          if(search) {
+            const s = search.toLowerCase();
+            list = list.filter(t => t.title.toLowerCase().includes(s) || (t.description || '').toLowerCase().includes(s));
+          }
+
+          if(list.length === 0){
+            tasksWrap.innerHTML = `<div class="muted" style="padding:12px">No tasks found.</div>`;
+            return;
+          }
+
+          const grid = document.createElement('div');
+          grid.className = 'tasks';
+          for(const t of list){
+            const item = document.createElement('div');
+            item.className = 'task';
+            item.innerHTML = `
+              <div class="task-left">
+                <input type="checkbox" data-id="${t.id}" ${t.completed ? 'checked' : ''} />
+                <div style="min-width:0">
+                  <div class="task-title">${escapeHtml(t.title)}</div>
+                  <div class="task-desc">${escapeHtml(t.description || '')}</div>
+                </div>
+              </div>
+              <div class="task-actions">
+                <div class="muted tiny">${new Date(t.createdAt).toLocaleString()}</div>
+                <button class="tiny ghost" data-edit="${t.id}">Edit</button>
+                <button class="tiny danger" data-delete="${t.id}">Delete</button>
+              </div>
+            `;
+            grid.appendChild(item);
+          }
+          tasksWrap.appendChild(grid);
+
+          // event delegation
+          grid.addEventListener('click', (e)=>{
+            const id = e.target.dataset.delete || e.target.dataset.edit;
+            if(e.target.matches('[data-delete]')){
+              if(confirm('Delete this task?')) removeTask(id);
+            } else if(e.target.matches('[data-edit]')){
+              openModal(id);
+            }
+          });
+          grid.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+            cb.addEventListener('change', (ev)=>toggleComplete(ev.target.dataset.id, ev.target.checked));
+          });
+        }
+
+        // initial draw
+        draw('all', '');
+
+        // filters
+        qs('#filterAll', container).addEventListener('click', ()=>{ draw('all', globalSearch.value) });
+        qs('#filterActive', container).addEventListener('click', ()=>{ draw('active', globalSearch.value) });
+        qs('#filterDone', container).addEventListener('click', ()=>{ draw('done', globalSearch.value) });
+
+        // remember for search to re-draw
+        container.draw = draw;
+      }
+
+      function renderProfile(){
+        setViewHeader('Profile', 'Your account information (local-only demo)');
+        viewRoot.innerHTML = '';
+        const container = document.createElement('div');
+        container.className = 'card';
+        const name = state.user.name || '';
+        const email = state.user.email || '';
+
+        container.innerHTML = `
+          <div style="display:flex;gap:18px;align-items:center;">
+            <div style="width:72px;height:72px;border-radius:14px;background:linear-gradient(135deg,var(--accent),#7dd3fc);display:grid;place-items:center;font-weight:800;color:#021021">
+              ${(name || 'U').slice(0,1).toUpperCase()}
+            </div>
+            <div>
+              <div style="font-weight:800;font-size:18px">${escapeHtml(name) || 'Guest'}</div>
+              <div class="muted">${escapeHtml(email) || 'Not signed in'}</div>
+            </div>
+          </div>
+
+          <hr style="border:0;border-top:1px solid rgba(255,255,255,0.02);margin:12px 0" />
+
+          <form id="profileForm">
+            <div class="form-row"><label>Name</label><input id="pname" value="${escapeHtml(name)}" /></div>
+            <div class="form-row"><label>Email</label><input id="pemail" value="${escapeHtml(email)}" /></div>
+            <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn ghost" id="signOut">Sign Out</button><button class="btn" id="saveProfile">Save</button></div>
+          </form>
+        `;
+        viewRoot.appendChild(container);
+
+        qs('#profileForm', container).addEventListener('submit', (e)=>{
+          e.preventDefault();
+          const n = qs('#pname', container).value.trim();
+          const em = qs('#pemail', container).value.trim();
+          state.user.name = n || null; state.user.email = em || null; state.user.loggedIn = !!(n && em);
+          saveState(); updateAuthUI();
+          alert('Profile saved locally (no server in demo).');
+        });
+
+        qs('#signOut', container).addEventListener('click', (e)=>{
+          e.preventDefault();
+          state.user = { name:null, email:null, loggedIn:false };
+          saveState(); updateAuthUI();
+          alert('Signed out (local only).');
+        });
+      }
+
+      function renderAbout(){
+        setViewHeader('About', 'Project: Single Page Application — Demo');
+        viewRoot.innerHTML = '';
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div style="font-weight:800;margin-bottom:8px">About this demo</div>
+          <div class="muted">This small SPA demonstrates client-side routing, dynamic UI updates, local state persistence, and basic CRUD operations. It's a front-end-only proof-of-concept — no server or backend APIs are used.</div>
+          <hr style="border:0;border-top:1px solid rgba(255,255,255,0.02);margin:12px 0" />
+          <div style="font-size:13px;color:var(--muted)">
+            Features: <ul style="margin:8px 0 0 18px">
+              <li>Hash-based routing (deep links)</li>
+              <li>Client-side state + localStorage persistence</li>
+              <li>Responsive layout and accessible controls</li>
+              <li>Task CRUD (create, read, update, delete)</li>
+            </ul>
+          </div>
+        `;
+        viewRoot.appendChild(card);
+      }
+
+      function renderNotFound(){
+        setViewHeader('Not found', 'The route does not exist');
+        viewRoot.innerHTML = '<div class="card muted">Page not found</div>';
+      }
+
+      // --- Task operations ---
+      function addTask(payload){
+        const t = {
+          id: uid('task'),
+          title: payload.title,
+          description: payload.description || '',
+          completed: false,
+          createdAt: now(),
+        };
+        state.tasks.push(t);
+        saveState();
+      }
+
+      function updateTask(id, payload){
+        const idx = state.tasks.findIndex(t=>t.id===id);
+        if(idx === -1) return;
+        Object.assign(state.tasks[idx], payload);
+        saveState();
+      }
+
+      function removeTask(id){
+        state.tasks = state.tasks.filter(t=>t.id !== id);
+        saveState();
+      }
+
+      function toggleComplete(id, checked){
+        updateTask(id, { completed: !!checked });
+      }
+
+      // --- Modal for add/edit ---
+      let editingId = null;
+      function openModal(editId=null){
+        editingId = editId;
+        if(editId){
+          const t = state.tasks.find(x=>x.id===editId);
+          if(!t) { alert('Task not found'); return; }
+          taskTitle.value = t.title;
+          taskDesc.value = t.description;
+          qs('#modalTitle').textContent = 'Edit Task';
+          qs('#modalSub').textContent = 'Modify your task';
+        } else {
+          taskForm.reset();
+          qs('#modalTitle').textContent = 'Add Task';
+          qs('#modalSub').textContent = 'Create a new task';
+        }
+        modalBackdrop.style.display = 'flex';
+        modalBackdrop.classList.add('open');
+        taskTitle.focus();
+      }
+
+      function closeModal(){
+        modalBackdrop.classList.remove('open');
+        modalBackdrop.style.display = 'none';
+        editingId = null;
+      }
+
+      function onSaveTask(e){
+        e.preventDefault();
+        const title = taskTitle.value.trim();
+        const desc = taskDesc.value.trim();
+        if(!title) { alert('Title is required'); taskTitle.focus(); return; }
+
+        if(editingId){
+          updateTask(editingId, { title, description: desc });
+        } else {
+          addTask({ title, description: desc });
+        }
+        closeModal();
+        // if current view is tasks, re-render to show changes
+        const r = getRoute();
+        if(r === 'tasks') renderTasks();
+        else router();
+      }
+
+      // --- Search ---
+      function onSearch(e){
+        const s = (e.target.value || '').trim();
+        // if tasks view present and has draw(), use it
+        if(getRoute() === 'tasks'){
+          // re-render tasks and draw with search
+          renderTasks();
+          const container = qs('#viewRoot .card');
+          if(container && container.draw) container.draw('all', s);
+        } else {
+          // else, filter tasks in dashboard recent view quick
+          router();
+        }
+      }
+
+      // --- Auth UI (local-only simulation) ---
+      function updateAuthUI(){
+        const authRegion = el('authRegion');
+        authRegion.innerHTML = '';
+        if(state.user && state.user.loggedIn){
+          const wrap = document.createElement('div');
+          wrap.style.display = 'flex';wrap.style.alignItems='center';wrap.style.gap='8px';
+          wrap.innerHTML = `<div class="muted" style="font-weight:700">${escapeHtml(state.user.name)}</div><button class="btn ghost" id="goProfile">Profile</button>`;
+          authRegion.appendChild(wrap);
+          qs('#goProfile', wrap).addEventListener('click', ()=>navigate('profile'));
+        } else {
+          const signBtn = document.createElement('button');
+          signBtn.className = 'btn';
+          signBtn.textContent = 'Sign In';
+          signBtn.addEventListener('click', ()=>{ promptSignIn(); });
+          authRegion.appendChild(signBtn);
+        }
+        // update sidebar stats
+        statTotal.querySelector('div[style]')?.nextElementSibling?.remove?.(); // safe
+        // set numbers
+        statTotal.querySelector('.muted')?.parentElement; // noop
+        qs('#statTotal .muted')?.parentElement; //noop
+        // update numeric values:
+        statTotal.querySelector('.muted')?.textContent === undefined;
+        // simpler:
+        statTotal.querySelector('.muted')?.textContent; // noop
+        // set numbers visually:
+        statTotal.querySelector('div:nth-child(2)')?.remove?.(); // ignore errors
+        // direct update:
+        statTotal.innerHTML = `<div class="muted">Total</div><div style="font-weight:800;font-size:18px">${state.tasks.length}</div>`;
+        statCompleted.innerText = state.tasks.filter(t=>t.completed).length;
+      }
+
+      function promptSignIn(){
+        const name = prompt('Name (local demo):');
+        if(!name) return;
+        const email = prompt('Email (local demo):');
+        if(!email) return;
+        state.user = { name: name.trim(), email: email.trim(), loggedIn: true };
+        saveState();
+        updateAuthUI();
+        alert('Signed in locally — this demo stores data only on your browser.');
+      }
+
+      // --- misc helpers & UI updates ---
+      function updateUI(force=false){
+        // update sidebar counts etc.
+        updateAuthUI();
+        // if current tasks view active, re-render to reflect changes
+        if(getRoute() === 'tasks') renderTasks();
+        if(getRoute() === 'dashboard') renderDashboard();
+        // ensure nav active states
+        qsa('.nav-link').forEach(n=>n.classList.toggle('active', n.dataset.route === getRoute()));
+      }
+
+      // simple HTML-escape
+      function escapeHtml(s=''){
+        return String(s)
+          .replaceAll('&','&amp;')
+          .replaceAll('<','&lt;')
+          .replaceAll('>','&gt;')
+          .replaceAll('"','&quot;')
+          .replaceAll("'",'&#039;');
+      }
+
+      // small sidebar toggle for mobile
+      window.toggleSidebar = function toggleSidebar(){
+        const sb = el('sidebar');
+        sb.classList.toggle('open');
+      };
+
+      // keep UI reactive on storage events (another tab)
+      window.addEventListener('storage', (e)=>{
+        if(e.key === STORAGE_KEY) {
+          state = loadState();
+          updateUI();
+        }
+      });
+
+      // expose for debugging (dev only)
+      window._taskflow = { state, saveState, addTask, updateTask, removeTask };
+    })();
+  </script>
+</body>
+</html>
 # project
